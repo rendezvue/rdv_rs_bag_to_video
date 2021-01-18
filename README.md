@@ -14,6 +14,6 @@ rdv_rs_bag_to_video/build$ cmake ..</code></pre>
 
 4. run
 <pre><code>rdv_rs_bag_to_video/build$ ./rdv_rs_bag_to_video --bag ../bag/test.bag --v</code></pre>
-* option : --bag "bab파일 경로" : load할 bag파일의 경로
+* option : --bag "rs bag파일 경로" : load할 bag파일의 경로
 * option : --i : image file 저장
 * option : --v : video file 저장
