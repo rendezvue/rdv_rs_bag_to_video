@@ -1,6 +1,9 @@
 # rdv_rs_bag_to_video
 
-1. Get ViNet source code
+## realsense-viewer로 저장한 bag파일을 image파일 혹은 mp4 video파일로 변환
+
+
+1. Get source code
 <pre><code>$ git clone https://github.com/rendezvue/rdv_rs_bag_to_video.git<br>
 $ cd rdv_rs_bag_to_video</code></pre>
 
