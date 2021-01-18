@@ -29,6 +29,9 @@ int main(int argc, char * argv[])
 	rs2::pipeline pipeline;
 	rs2::pipeline_profile pipeline_profile;
 	filesystem::path bag_file;
+
+	bool b_write_image = false ;
+	bool b_write_video = false ;
 	
 	//parameter
 	if(argc<2)
@@ -41,15 +44,21 @@ int main(int argc, char * argv[])
         namespace po = boost::program_options;
         po::options_description desc("Options");
         desc.add_options()
+			("i", "")
+            ("v", "")
             ("bag", po::value<std::string>()->default_value(""));
 
         po::variables_map vm;
         po::store(po::parse_command_line(argc,argv,desc),vm);
         po::notify(vm);
 
+		std::cout << "i parsed: "  << vm.count("i") << "\n";
+        std::cout << "v parsed: "  << vm.count("v") << "\n";
         std::cout << "bag: '" << boost::any_cast<std::string>(vm["bag"].value()) << "'\n";
 
 		bag_file = boost::any_cast<std::string>(vm["bag"].value()) ;
+		if( vm.count("i") > 0 )	b_write_image = true ;
+		if( vm.count("v") > 0 )	b_write_video = true ;
     }
 
 	//-------------------------------------------
@@ -87,15 +96,23 @@ int main(int argc, char * argv[])
 	    // Create Root Directory (Bag File Name)
 	    directory = bag_file.parent_path().generic_string() + "/" + bag_file.stem().string();
 	    if( !filesystem::create_directories( directory ) ){
-	        throw std::runtime_error( "failed can't create root directory" );
+	        //throw std::runtime_error( "failed can't create root directory" );
+	        printf( "exist root directory\n" );
 	    }
+		else
+		{
 
-	    // Create Sub Directory for Each Streams (Stream Name)
-	    const std::vector<rs2::stream_profile> stream_profiles = pipeline_profile.get_streams();
-	    for( const rs2::stream_profile stream_profile : stream_profiles ){
-	        filesystem::path sub_directory = directory.generic_string() + "/" + stream_profile.stream_name();
-	        filesystem::create_directories( sub_directory );
-	    }
+		    // Create Sub Directory for Each Streams (Stream Name)
+		    const std::vector<rs2::stream_profile> stream_profiles = pipeline_profile.get_streams();
+		    for( const rs2::stream_profile stream_profile : stream_profiles ){
+		        filesystem::path sub_directory = directory.generic_string() + "/" + stream_profile.stream_name();
+		        filesystem::create_directories( sub_directory );
+		    }
+
+			//Create Video Directory
+			filesystem::path vid_directory = directory.generic_string() + "/Video";
+	        filesystem::create_directories( vid_directory );
+		}
 	}
 
 	//Run
@@ -116,6 +133,9 @@ int main(int argc, char * argv[])
 
 	// Retrieve Last Position
     uint64_t last_position = pipeline_profile.get_device().as<rs2::playback>().get_position();
+
+	//video writer
+	cv::VideoWriter *pVideoWriter = NULL ;
 	
 	while(1)
 	{
@@ -210,34 +230,62 @@ int main(int argc, char * argv[])
 		//------------------------------------------------------
 		//Save
 		//Color
-		if( color_frame && !color_mat.empty() )
+		if( b_write_image )
 		{
-		    // Create Save Directory and File Name
-		    std::ostringstream oss;
-		    oss << directory.generic_string() << "/Color/";
-		    oss << std::setfill( '0' ) << std::setw( 6 ) << color_frame.get_frame_number() << ".png";
+			if( color_frame && !color_mat.empty() )
+			{
+			    // Create Save Directory and File Name
+			    std::ostringstream oss;
+			    oss << directory.generic_string() << "/Color/";
+			    oss << std::setfill( '0' ) << std::setw( 6 ) << color_frame.get_frame_number() << ".png";
 
-		    // Write Color Image
-		    cv::imwrite( oss.str(), color_mat);
+			    // Write Color Image
+			    cv::imwrite( oss.str(), color_mat);
+			}
+
+			//Depth
+			if( depth_frame && !depth_mat.empty() )
+			{
+				const bool scaling = true ;
+			    // Create Save Directory and File Name
+			    std::ostringstream oss;
+			    oss << directory.generic_string() << "/Depth/";
+			    oss << std::setfill( '0' ) << std::setw( 6 ) << depth_frame.get_frame_number() << ".png";
+
+			    // Scaling
+			    cv::Mat scale_mat = depth_mat;
+			    if( scaling ){
+			        depth_mat.convertTo( scale_mat, CV_8U, -255.0 / 10000.0, 255.0 ); // 0-10000 -> 255(white)-0(black)
+			    }
+
+			    // Write Depth Image
+			    cv::imwrite( oss.str(), scale_mat );
+			}
 		}
 
-		//Depth
-		if( depth_frame && !depth_mat.empty() )
+		if( b_write_video )
 		{
-			const bool scaling = false ;
-		    // Create Save Directory and File Name
-		    std::ostringstream oss;
-		    oss << directory.generic_string() << "/Depth/";
-		    oss << std::setfill( '0' ) << std::setw( 6 ) << depth_frame.get_frame_number() << ".png";
-
-		    // Scaling
-		    cv::Mat scale_mat = depth_mat;
-		    if( scaling ){
-		        depth_mat.convertTo( scale_mat, CV_8U, -255.0 / 10000.0, 255.0 ); // 0-10000 -> 255(white)-0(black)
-		    }
-
-		    // Write Depth Image
-		    cv::imwrite( oss.str(), scale_mat );
+			if( pVideoWriter == NULL )
+			{	
+				 //video writer
+				 cv::Size frameSize(static_cast<int>(color_width), static_cast<int>(color_height));
+				 std::string str_path_video = directory.generic_string() + "/Video/video.mp4"; 
+				 pVideoWriter = new cv::VideoWriter(str_path_video, cv::VideoWriter::fourcc('M','P','4','V'), 20, frameSize, true); //initialize the VideoWriter object 
+				
+				 if ( !pVideoWriter->isOpened() ) //if not initialize the VideoWriter successfully, exit the program
+				{
+					 std::cout << "ERROR: Failed to write the video" << std::endl;
+				}		
+			}
+			else
+			{
+				if( color_frame && !color_mat.empty() )
+				{
+					//write
+					//받아온 Frame을 저장한다.
+					(*pVideoWriter) << color_mat;
+				}
+			}
 		}
 		//Save
 		//------------------------------------------------------
@@ -257,6 +305,8 @@ int main(int argc, char * argv[])
 	}
 
 	//Exit
+	if( pVideoWriter ) delete pVideoWriter ;
+	
 	// Stop Pipline
     pipeline.stop();
 
