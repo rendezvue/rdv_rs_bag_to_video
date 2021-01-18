@@ -2,7 +2,19 @@ project(rdv_rs_bag_to_video)
 
 cmake_minimum_required(VERSION 2.8)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17")
+# Require C++17 (or later)
+set( CMAKE_CXX_STANDARD 17 )
+set( CMAKE_CXX_STANDARD_REQUIRED ON )
+set( CMAKE_CXX_EXTENSIONS OFF )
+
+# Compiler Option
+set( FILESYSTEM )
+if( "${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU" )
+  set( FILESYSTEM "stdc++fs" )
+elseif( "${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang" )
+  set( FILESYSTEM "c++fs" )
+endif()
 
 #realsense
 find_library(REALSENSE2_FOUND realsense2 HINTS ${LIBRARY_DIR} REQUIRED)
@@ -29,3 +41,6 @@ include_directories(${SRC_PATH})
 add_executable( rdv_rs_bag_to_video ${SRC_SRC})
 
 target_link_libraries(rdv_rs_bag_to_video ${OpenCV_LIBS} ${Boost_LIBRARIES} ${REALSENSE2_FOUND})
+if( NOT WIN32 )
+	target_link_libraries( rdv_rs_bag_to_video ${FILESYSTEM} )
+endif()
